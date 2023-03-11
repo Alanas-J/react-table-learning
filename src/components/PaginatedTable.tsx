@@ -2,12 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import MOCK_DATA from './MOCK_DATA.json'
 
-// import { QueryClient, QueryClientProvider, useQuery } from 'react-query'
-
-import {PaginationState, useReactTable, getCoreRowModel, ColumnDef, flexRender } from '@tanstack/react-table'
-
-// import { fetchData, Person } from './fetchData'
-// const queryClient = new QueryClient()
+import {PaginationState, FiltersTableState, useReactTable, getCoreRowModel, ColumnDef, flexRender, ColumnFiltersState } from '@tanstack/react-table'
 
 export default function PaginatedTable() {
     const rerender = React.useReducer(() => ({}), {})[1]
@@ -28,7 +23,7 @@ export default function PaginatedTable() {
             },
             {
                 header: 'Date of birth',
-                accessorFn: (row) => new Date(row.date_of_birth).toUTCString()
+                accessorFn: (row) => new Date(row.date_of_birth).getFullYear()
             },
             {
                 header: 'Country',
@@ -40,23 +35,31 @@ export default function PaginatedTable() {
             }
         ],
         [])
-    
-    // Lets pretend this is fetched with pagination values
-    /* // If we were using react query to handle tables
-    const dataQuery = useQuery(
-    ['data', fetchDataOptions],
-    () => fetchData(fetchDataOptions),
-        { keepPreviousData: true }
-    )
-    */
 
     const [{ pageIndex, pageSize }, setPagination] =
     React.useState<PaginationState>({
         pageIndex: 0, // page to fetch
         pageSize: 10, //amt of records to fetch
+    }) 
+
+    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
+
+    const filteredData = MOCK_DATA.filter((row) => {
+        let valid = true;
+
+        for(const {id, value} of columnFilters) {
+            const element = row[id as keyof typeof row]
+
+            if (typeof element === 'string') valid = element.includes(value as string);
+            if (typeof element === 'number') valid = element.toString().includes(value as string);
+        }
+
+        return valid;
     })
-    const page = MOCK_DATA.slice(pageIndex*pageSize, pageIndex*pageSize+pageSize)
-    const data = React.useMemo(() => page, [pageIndex, pageSize])
+
+
+    const page = filteredData.slice(pageIndex*pageSize, pageIndex*pageSize+pageSize)
+    const data = React.useMemo(() => page, [pageIndex, pageSize, columnFilters])
 
     
     const pagination = React.useMemo(
@@ -69,14 +72,16 @@ export default function PaginatedTable() {
     const table = useReactTable({
     data: data ?? [], // if query hadn't returned render empty
     columns,
-    pageCount: Math.ceil(200/pagination.pageSize),
+    pageCount: Math.ceil(filteredData.length/pagination.pageSize),
     state: {
         pagination,
+        columnFilters
     },
     onPaginationChange: setPagination,
+    onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
-    manualFiltering: true,
+    // manualFiltering: true,
     debugTable: true,
     })
 
@@ -109,14 +114,7 @@ export default function PaginatedTable() {
                 {headerGroup.headers.map(header => {
                 return (
                     <th key={header.id} colSpan={header.colSpan}>
-                    {header.isPlaceholder ? null : (
-                        <div>
-                        {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                        )}
-                        </div>
-                    )}
+                        <input value={header.column.getFilterValue() as string || ''} onChange={e => header.column.setFilterValue(e.target.value)} type="text" placeholder={header.column.columnDef.header as string} />
                     </th>
                 )
                 })}
